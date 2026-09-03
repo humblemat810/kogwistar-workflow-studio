@@ -63,3 +63,16 @@ test('connecting handles persists an ordinary wf_next edge', async ({ page }) =>
     relation: 'wf_next',
   })
 })
+
+test('keyboard delete does not bypass explicit deletion controls', async ({ page }) => {
+  const deletes: string[] = []
+  page.on('request', request => {
+    if (request.method() === 'DELETE') deletes.push(request.url())
+  })
+  await page.goto('/')
+  await page.locator('.react-flow__node').first().click()
+  await page.keyboard.press('Delete')
+  await page.keyboard.press('Backspace')
+  await expect(page.locator('.react-flow__node')).toHaveCount(3)
+  expect(deletes).toHaveLength(0)
+})

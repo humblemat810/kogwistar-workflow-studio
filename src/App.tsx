@@ -135,8 +135,6 @@ function Studio() {
     }
     localStorage.setItem(layoutKey(workflowId), JSON.stringify(value))
   }, [instance, nodes, workflowId])
-  const onNodesChange = useCallback((changes: NodeChange<WorkflowNode>[]) => setNodes(current => applyNodeChanges(changes, current)), [])
-  const onEdgesChange = useCallback((changes: EdgeChange[]) => setEdges(current => applyEdgeChanges(changes, current)), [])
   const mutate = async (path: string, body: unknown, method = 'POST') => {
     try {
       const result = await request<{ version?: number }>(path, { method, body: JSON.stringify(body) })
@@ -146,6 +144,14 @@ function Studio() {
       setMessage(error instanceof Error ? error.message : 'Mutation failed')
     }
   }
+  const onNodesChange = useCallback((changes: NodeChange<WorkflowNode>[]) => {
+    if (changes.some(change => change.type === 'remove')) setMessage('Use the inspector Delete button to remove a node')
+    setNodes(current => applyNodeChanges(changes.filter(change => change.type !== 'remove'), current))
+  }, [])
+  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+    if (changes.some(change => change.type === 'remove')) setMessage('Use the inspector Delete button to remove an edge')
+    setEdges(current => applyEdgeChanges(changes.filter(change => change.type !== 'remove'), current))
+  }, [])
   const onConnect = useCallback((connection: Connection) => {
     if (!connection.source || !connection.target) return
     void mutate(`/api/workflow/design/${encodeURIComponent(workflowId)}/edges`, {
