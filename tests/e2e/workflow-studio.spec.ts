@@ -27,6 +27,8 @@ test('loads graph, edits selection, persists layout, and restores viewport', asy
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Workflow Studio' })).toBeVisible()
   await expect(page.locator('.react-flow__node')).toHaveCount(3)
+  await expect(page.locator('.subtle').first()).toHaveText(/3 nodes.*1 edges.*1 terminals.*1 routed/)
+  await page.screenshot({ path: 'docs/screenshots/workflow-studio-desktop.png', fullPage: true })
   await page.locator('.react-flow__node').first().click()
   await expect(page.getByRole('heading', { name: 'Node' })).toBeVisible()
 

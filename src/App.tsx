@@ -129,6 +129,7 @@ function Studio() {
   }, [instance, workflowId])
 
   const saveLayout = useCallback((nextNodes = nodes) => {
+    if (!nextNodes.length) return
     const value: Layout = {
       nodes: Object.fromEntries(nextNodes.map(node => [node.id, node.position])),
       viewport: instance?.getViewport(),
