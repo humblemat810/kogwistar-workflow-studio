@@ -23,12 +23,12 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test('loads graph, edits selection, persists layout, and restores viewport', async ({ page }) => {
+test('loads graph, edits selection, persists layout, and restores viewport', async ({ page }, testInfo) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Workflow Studio' })).toBeVisible()
   await expect(page.locator('.react-flow__node')).toHaveCount(3)
   await expect(page.locator('.subtle').first()).toHaveText(/3 nodes.*1 edges.*1 terminals.*1 routed/)
-  await page.screenshot({ path: 'docs/screenshots/workflow-studio-desktop.png', fullPage: true })
+  await page.screenshot({ path: testInfo.outputPath('workflow-studio-desktop.png'), fullPage: true })
   await page.locator('.react-flow__node').first().click()
   await expect(page.getByRole('heading', { name: 'Node' })).toBeVisible()
 
@@ -79,12 +79,12 @@ test('keyboard delete does not bypass explicit deletion controls', async ({ page
   expect(deletes).toHaveLength(0)
 })
 
-test('mobile layout remains usable and malformed saved layout is ignored', async ({ page }) => {
+test('mobile layout remains usable and malformed saved layout is ignored', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.addInitScript(() => localStorage.setItem('kogwistar.workflow.layout.demo.goal-loop', '{not-json'))
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Workflow Studio' })).toBeVisible()
   await expect(page.locator('.react-flow__node')).toHaveCount(3)
   await expect(page.locator('.workspace')).toBeVisible()
-  await page.screenshot({ path: 'docs/screenshots/workflow-studio-mobile.png', fullPage: true })
+  await page.screenshot({ path: testInfo.outputPath('workflow-studio-mobile.png'), fullPage: true })
 })
