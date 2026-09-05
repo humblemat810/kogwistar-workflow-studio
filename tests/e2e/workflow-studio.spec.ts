@@ -78,3 +78,13 @@ test('keyboard delete does not bypass explicit deletion controls', async ({ page
   await expect(page.locator('.react-flow__node')).toHaveCount(3)
   expect(deletes).toHaveLength(0)
 })
+
+test('mobile layout remains usable and malformed saved layout is ignored', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.addInitScript(() => localStorage.setItem('kogwistar.workflow.layout.demo.goal-loop', '{not-json'))
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Workflow Studio' })).toBeVisible()
+  await expect(page.locator('.react-flow__node')).toHaveCount(3)
+  await expect(page.locator('.workspace')).toBeVisible()
+  await page.screenshot({ path: 'docs/screenshots/workflow-studio-mobile.png', fullPage: true })
+})

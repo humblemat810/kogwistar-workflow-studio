@@ -33,6 +33,17 @@ type Layout = {
 const API_ROOT = import.meta.env.VITE_KOGWISTAR_API_ROOT || 'http://127.0.0.1:28110'
 const layoutKey = (workflowId: string) => `kogwistar.workflow.layout.${workflowId}`
 
+function readLayout(workflowId: string): Layout | null {
+  try {
+    const raw = localStorage.getItem(layoutKey(workflowId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Layout
+    return parsed && typeof parsed.nodes === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
 function authHeaders(): Record<string, string> {
   const token = sessionStorage.getItem('kogwistar_access_token')
   return token ? { Authorization: `Bearer ${token}` } : {}
@@ -91,11 +102,12 @@ function Studio() {
   const [selected, setSelected] = useState<{ type: 'node' | 'edge'; id: string } | null>(null)
   const [message, setMessage] = useState('Ready for a workflow')
   const [instance, setInstance] = useState<ReactFlowInstance<WorkflowNode, Edge> | null>(null)
+  const [authReady, setAuthReady] = useState(false)
 
   const load = useCallback(async () => {
     try {
       setMessage('Loading workflow...')
-      const saved = JSON.parse(localStorage.getItem(layoutKey(workflowId)) || 'null') as Layout | null
+      const saved = readLayout(workflowId)
       const [graph, ops, history] = await Promise.all([
         request<ApiGraph>(`/api/workflow/design/${encodeURIComponent(workflowId)}/graph`),
         request<Array<Record<string, unknown>>>('/api/workflow/catalog/ops'),
@@ -121,10 +133,11 @@ function Studio() {
     request<{ email?: string; user_id?: string }>('/api/auth/me')
       .then(me => setDesignerId(me.email || me.user_id || 'designer-local'))
       .catch(() => undefined)
+      .finally(() => setAuthReady(true))
   }, [])
   useEffect(() => { load() }, [load])
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem(layoutKey(workflowId)) || 'null') as Layout | null
+    const saved = readLayout(workflowId)
     if (instance && saved?.viewport) instance.setViewport(saved.viewport)
   }, [instance, workflowId])
 
@@ -154,6 +167,10 @@ function Studio() {
     setEdges(current => applyEdgeChanges(changes.filter(change => change.type !== 'remove'), current))
   }, [])
   const onConnect = useCallback((connection: Connection) => {
+    if (!authReady) {
+      setMessage('Waiting for authentication')
+      return
+    }
     if (!connection.source || !connection.target) return
     void mutate(`/api/workflow/design/${encodeURIComponent(workflowId)}/edges`, {
       designer_id: designerId,
@@ -163,7 +180,7 @@ function Studio() {
       is_default: true,
       metadata: {},
     })
-  }, [designerId, workflowId])
+  }, [authReady, designerId, workflowId])
   const onNodeDragStop = useCallback((_: unknown, node: WorkflowNode) => {
     saveLayout(nodes.map(current => current.id === node.id ? { ...current, position: node.position } : current))
   }, [nodes, saveLayout])
@@ -186,9 +203,9 @@ function Studio() {
 
   return <main className="shell">
     <header><div><div className="eyebrow">Kogwistar / graph-native design</div><h1>Workflow Studio</h1><p className="lede">Compose ordinary nodes, route with predicates, and keep reversible design history close to the graph.</p></div><div className="status"><span className="status-dot" />{message}<a href={`${API_ROOT}/api/auth/login?return_to=${encodeURIComponent(window.location.href)}`}>Sign in</a></div></header>
-    <section className="toolbar"><input aria-label="Workflow ID" value={workflowId} onChange={event => setWorkflowId(event.target.value)} /><input aria-label="Designer ID" value={designerId} onChange={event => setDesignerId(event.target.value)} /><button className="primary" onClick={load}>Load design</button><button onClick={() => mutate(`/api/workflow/design/${encodeURIComponent(workflowId)}/nodes`, { designer_id: designerId, label: 'New step', op: String(catalog.find(op => op.op === 'llm_call')?.op || catalog[0]?.op || 'noop'), metadata: {} })}>+ Node</button><button onClick={() => instance?.fitView({ padding: .2 })}>Fit</button><button onClick={() => mutate(`/api/workflow/design/${encodeURIComponent(workflowId)}/undo`, { designer_id: designerId })}>Undo</button><button onClick={() => mutate(`/api/workflow/design/${encodeURIComponent(workflowId)}/redo`, { designer_id: designerId })}>Redo</button></section>
+    <section className="toolbar"><input aria-label="Workflow ID" value={workflowId} onChange={event => setWorkflowId(event.target.value)} /><input aria-label="Designer ID" value={designerId} onChange={event => setDesignerId(event.target.value)} /><button className="primary" onClick={load}>Load design</button><button disabled={!authReady} onClick={() => mutate(`/api/workflow/design/${encodeURIComponent(workflowId)}/nodes`, { designer_id: designerId, label: 'New step', op: String(catalog.find(op => op.op === 'llm_call')?.op || catalog[0]?.op || 'noop'), metadata: {} })}>+ Node</button><button onClick={() => instance?.fitView({ padding: .2 })}>Fit</button><button disabled={!authReady} onClick={() => mutate(`/api/workflow/design/${encodeURIComponent(workflowId)}/undo`, { designer_id: designerId })}>Undo</button><button disabled={!authReady} onClick={() => mutate(`/api/workflow/design/${encodeURIComponent(workflowId)}/redo`, { designer_id: designerId })}>Redo</button></section>
     <section className="workspace"><div className="canvas card"><ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} onNodeClick={(_, node) => setSelected({ type: 'node', id: node.id })} onEdgeClick={(_, edge) => setSelected({ type: 'edge', id: edge.id })} onPaneClick={() => setSelected(null)} onNodeDragStop={onNodeDragStop} onMoveEnd={() => saveLayout()} onInit={setInstance} fitView><Background color="#c8d8cf" gap={24} /><Controls /><MiniMap nodeColor={node => { const metadata = (node.data as NodeData | undefined)?.metadata; return metadata?.wf_terminal ? '#efbd59' : metadata?.wf_start ? '#b7e4cc' : '#fff' }} /></ReactFlow><div className="canvas-note">scroll zoom · drag canvas to pan · drag nodes to save layout</div></div>
-      <aside className="card inspector"><h2>Design signals</h2><p className="subtle">{nodes.length} nodes · {edges.length} edges · {terminalCount} terminals · {routedCount} routed</p><div className="chips"><span>start</span><span>terminal</span><span>predicate</span>{nodes.some(node => node.data.metadata?.wf_mode === 'goal') && <span className="goal">goal profile</span>}</div><hr />{selectedNode ? <><h2>Node</h2><p className="mono">{selectedNode.id}</p><label>Label<input id="node-label" defaultValue={selectedNode.data.label} /></label><label>Resolver op<input id="node-op" list="ops" defaultValue={String(selectedNode.data.metadata?.wf_op || 'noop')} /></label><div className="split"><label>Start<select id="node-start" defaultValue={String(Boolean(selectedNode.data.metadata?.wf_start))}><option value="false">no</option><option value="true">yes</option></select></label><label>Terminal<select id="node-terminal" defaultValue={String(Boolean(selectedNode.data.metadata?.wf_terminal))}><option value="false">no</option><option value="true">yes</option></select></label></div><label>Metadata JSON<textarea id="node-meta" defaultValue={JSON.stringify(selectedNode.data.metadata || {}, null, 2)} /></label><div className="actions"><button className="primary" onClick={() => saveNode(selectedNode)}>Save node</button><button className="danger" onClick={() => mutate(`/api/workflow/design/${encodeURIComponent(workflowId)}/nodes/${encodeURIComponent(selectedNode.id)}`, { designer_id: designerId }, 'DELETE')}>Delete</button></div></> : selectedEdge ? <><h2>Edge</h2><p className="mono">{selectedEdge.source} -&gt; {selectedEdge.target}</p><label>Predicate<input id="edge-predicate" defaultValue={String(selectedEdge.label || '')} /></label><div className="actions"><button className="primary" onClick={() => saveEdge(selectedEdge)}>Save edge</button><button className="danger" onClick={() => mutate(`/api/workflow/design/${encodeURIComponent(workflowId)}/edges/${encodeURIComponent(selectedEdge.id)}`, { designer_id: designerId }, 'DELETE')}>Delete</button></div></> : <><h2>Inspector</h2><p className="subtle">Select node/edge to edit graph semantics. Connect handles to create routing edges.</p></>}</aside></section>
+      <aside className="card inspector"><h2>Design signals</h2><p className="subtle">{nodes.length} nodes · {edges.length} edges · {terminalCount} terminals · {routedCount} routed</p><div className="chips"><span>start</span><span>terminal</span><span>predicate</span>{nodes.some(node => node.data.metadata?.wf_mode === 'goal') && <span className="goal">goal profile</span>}</div><hr />{selectedNode ? <><h2>Node</h2><p className="mono">{selectedNode.id}</p><label>Label<input id="node-label" defaultValue={selectedNode.data.label} /></label><label>Resolver op<input id="node-op" list="ops" defaultValue={String(selectedNode.data.metadata?.wf_op || 'noop')} /></label><div className="split"><label>Start<select id="node-start" defaultValue={String(Boolean(selectedNode.data.metadata?.wf_start))}><option value="false">no</option><option value="true">yes</option></select></label><label>Terminal<select id="node-terminal" defaultValue={String(Boolean(selectedNode.data.metadata?.wf_terminal))}><option value="false">no</option><option value="true">yes</option></select></label></div><label>Metadata JSON<textarea id="node-meta" defaultValue={JSON.stringify(selectedNode.data.metadata || {}, null, 2)} /></label><div className="actions"><button disabled={!authReady} className="primary" onClick={() => saveNode(selectedNode)}>Save node</button><button disabled={!authReady} className="danger" onClick={() => mutate(`/api/workflow/design/${encodeURIComponent(workflowId)}/nodes/${encodeURIComponent(selectedNode.id)}`, { designer_id: designerId }, 'DELETE')}>Delete</button></div></> : selectedEdge ? <><h2>Edge</h2><p className="mono">{selectedEdge.source} -&gt; {selectedEdge.target}</p><label>Predicate<input id="edge-predicate" defaultValue={String(selectedEdge.label || '')} /></label><div className="actions"><button disabled={!authReady} className="primary" onClick={() => saveEdge(selectedEdge)}>Save edge</button><button disabled={!authReady} className="danger" onClick={() => mutate(`/api/workflow/design/${encodeURIComponent(workflowId)}/edges/${encodeURIComponent(selectedEdge.id)}`, { designer_id: designerId }, 'DELETE')}>Delete</button></div></> : <><h2>Inspector</h2><p className="subtle">Select node/edge to edit graph semantics. Connect handles to create routing edges.</p></>}</aside></section>
     <datalist id="ops">{catalog.map(op => <option key={String(op.op)} value={String(op.op)}>{String(op.label || op.op)}</option>)}</datalist>
   </main>
 }
