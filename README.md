@@ -20,6 +20,10 @@ $env:VITE_KOGWISTAR_API_ROOT = 'http://127.0.0.1:28110'
 npm run dev
 ```
 
+Use the Vite default URL `http://localhost:5173/` when using Kogwistar's
+default CORS configuration. If you serve this app from another origin, add
+that exact origin to the backend `ALLOWED_ORIGINS` setting.
+
 Production checks:
 
 ```powershell
