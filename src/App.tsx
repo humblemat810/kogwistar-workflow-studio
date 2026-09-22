@@ -131,7 +131,7 @@ function Studio() {
       const [graph, ops, history] = await Promise.all([
         request<ApiGraph>(`/api/workflow/design/${encodeURIComponent(activeWorkflowId)}/graph`),
         request<Array<Record<string, unknown>>>('/api/workflow/catalog/ops'),
-        request<Record<string, unknown>>(`/api/workflow/design/${encodeURIComponent(workflowId)}/history`),
+        request<Record<string, unknown>>(`/api/workflow/design/${encodeURIComponent(activeWorkflowId)}/history`),
       ])
       const selectedEdgeIds = new Set<string>()
       if (runId.trim()) {
@@ -204,7 +204,7 @@ function Studio() {
       return
     }
     if (!connection.source || !connection.target) return
-    void mutate(`/api/workflow/design/${encodeURIComponent(workflowId)}/edges`, {
+    void mutate(`/api/workflow/design/${encodeURIComponent(activeWorkflowId)}/edges`, {
       designer_id: designerId,
       src: connection.source,
       dst: connection.target,
@@ -212,7 +212,7 @@ function Studio() {
       is_default: true,
       metadata: {},
     })
-  }, [authReady, designerId, workflowId])
+  }, [authReady, designerId, activeWorkflowId])
   const onNodeDragStop = useCallback((_: unknown, node: WorkflowNode) => {
     saveLayout(nodes.map(current => current.id === node.id ? { ...current, position: node.position } : current))
   }, [nodes, saveLayout])
@@ -222,11 +222,11 @@ function Studio() {
     metadata.wf_op = (document.getElementById('node-op') as HTMLInputElement).value || 'noop'
     metadata.wf_start = (document.getElementById('node-start') as HTMLSelectElement).value === 'true'
     metadata.wf_terminal = (document.getElementById('node-terminal') as HTMLSelectElement).value === 'true'
-    void mutate(`/api/workflow/design/${encodeURIComponent(workflowId)}/nodes`, { designer_id: designerId, node_id: node.id, label: (document.getElementById('node-label') as HTMLInputElement).value || node.data.label, op: String(metadata.wf_op), start: Boolean(metadata.wf_start), terminal: Boolean(metadata.wf_terminal), fanout: Boolean(metadata.wf_fanout), metadata })
+    void mutate(`/api/workflow/design/${encodeURIComponent(activeWorkflowId)}/nodes`, { designer_id: designerId, node_id: node.id, label: (document.getElementById('node-label') as HTMLInputElement).value || node.data.label, op: String(metadata.wf_op), start: Boolean(metadata.wf_start), terminal: Boolean(metadata.wf_terminal), fanout: Boolean(metadata.wf_fanout), metadata })
   }
   const saveEdge = (edge: Edge) => {
     const metadata = { ...((edge.data?.metadata as Record<string, unknown>) || {}), wf_predicate: (document.getElementById('edge-predicate') as HTMLInputElement).value || null }
-    void mutate(`/api/workflow/design/${encodeURIComponent(workflowId)}/edges`, { designer_id: designerId, edge_id: edge.id, src: edge.source, dst: edge.target, relation: 'wf_next', predicate: metadata.wf_predicate, is_default: true, metadata })
+    void mutate(`/api/workflow/design/${encodeURIComponent(activeWorkflowId)}/edges`, { designer_id: designerId, edge_id: edge.id, src: edge.source, dst: edge.target, relation: 'wf_next', predicate: metadata.wf_predicate, is_default: true, metadata })
   }
   const selectedNode = selected?.type === 'node' ? nodes.find(node => node.id === selected.id) : undefined
   const selectedEdge = selected?.type === 'edge' ? edges.find(edge => edge.id === selected.id) : undefined

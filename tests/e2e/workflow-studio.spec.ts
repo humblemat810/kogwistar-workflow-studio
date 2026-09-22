@@ -154,6 +154,24 @@ test('keeps parallel route metadata visible, overlays selected run routes, and o
   expect(await page.evaluate(() => localStorage.getItem('kogwistar.workflow.layout.child.workflow'))).toContain('"observe"')
 })
 
+test('targets mutations at the active nested workflow canvas', async ({ page }) => {
+  const mutations: string[] = []
+  page.on('request', request => {
+    if ((request.method() === 'POST' || request.method() === 'DELETE') && request.url().includes('/api/workflow/design/')) {
+      mutations.push(request.url())
+    }
+  })
+
+  await page.goto('/')
+  await page.getByLabel('Workflow ID').fill('routes')
+  await page.getByRole('button', { name: 'Load design' }).click()
+  await page.locator('.react-flow__node').first().click()
+  await page.getByRole('button', { name: /Open subworkflow/ }).click()
+  await page.getByRole('button', { name: '+ Node' }).click()
+  await expect.poll(() => mutations.some(url => url.includes('/design/child.workflow/nodes'))).toBe(true)
+  expect(mutations.some(url => url.includes('/design/routes/nodes'))).toBe(false)
+})
+
 test('surfaces missing and unauthorized child workflow errors', async ({ page }) => {
   await page.goto('/')
   await page.getByLabel('Workflow ID').fill('missing')
